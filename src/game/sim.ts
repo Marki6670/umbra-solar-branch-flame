@@ -1,4 +1,4 @@
-import type { AABB, Memory } from "@/game/levels";
+import type { AABB, Memory, WaterVol } from "@/game/levels";
 
 const PLAYER_H = 1.62;
 const RADIUS = 0.32;
@@ -47,6 +47,9 @@ export const sim = {
   invertX: false,
   boxes: [] as AABB[],
   memories: [] as Memory[],
+  waters: [] as WaterVol[],
+  wet: 0,
+  splash: 0,
   nearId: null as string | null,
   portalX: 0,
   portalZ: -9,
@@ -72,6 +75,25 @@ function reducedMotion() {
   );
 }
 
+function waterAt(x: number, z: number) {
+  let bestT = 0;
+  let found: WaterVol | null = null;
+  for (const w of sim.waters) {
+    if (x <= w.minX || x >= w.maxX || z <= w.minZ || z >= w.maxZ) continue;
+    const inset = Math.min(x - w.minX, w.maxX - x, z - w.minZ, w.maxZ - z);
+    const t = Math.max(0, Math.min(1, (inset - 0.16) / 1.05));
+    if (t >= bestT) {
+      bestT = t;
+      found = w;
+    }
+  }
+  return { w: found, t: bestT };
+}
+
+function shallowFloor(b: AABB) {
+  return b.maxY <= 0.05 && b.minY < -0.3;
+}
+
 function overlap(b: AABB) {
   const minX = sim.x - RADIUS;
   const maxX = sim.x + RADIUS;
@@ -90,6 +112,7 @@ function collide(axis: "x" | "y" | "z") {
   for (let iter = 0; iter < 4; iter++) {
     let hit = false;
     for (const b of sim.boxes) {
+      if (shallowFloor(b) && waterAt(sim.x, sim.z).t > 0.3) continue;
       const o = overlap(b);
       if (!o) continue;
       if (axis === "y") {
@@ -155,15 +178,20 @@ function tick(dt: number) {
     f /= len;
     r /= len;
   }
+  const dive = waterAt(sim.x, sim.z);
   const sprint =
     sim.keys.has("ShiftLeft") || sim.keys.has("ShiftRight") || sim.sprintToggle;
-  const max = sprint ? 6.15 : 3.35;
+  const max = (sprint ? 6.15 : 3.35) * (dive.t > 0.34 ? 0.46 : 1);
   const fx = -Math.sin(sim.yaw);
   const fz = -Math.cos(sim.yaw);
   const rx = Math.cos(sim.yaw);
   const rz = -Math.sin(sim.yaw);
-  const tx = (fx * f + rx * r) * max;
-  const tz = (fz * f + rz * r) * max;
+  let tx = (fx * f + rx * r) * max;
+  let tz = (fz * f + rz * r) * max;
+  if (dive.w && dive.t > 0.12) {
+    tx += dive.w.flow[0] * (0.85 + dive.t * 1.35);
+    tz += dive.w.flow[1] * (0.85 + dive.t * 1.35);
+  }
   const k = 1 - Math.exp(-14 * dt);
   sim.vx += (tx - sim.vx) * k;
   sim.vz += (tz - sim.vz) * k;
@@ -182,6 +210,27 @@ function tick(dt: number) {
   sim.z += sim.vz * dt;
   collide("z");
   sim.speed = Math.hypot(sim.vx, sim.vz);
+
+  const now = waterAt(sim.x, sim.z);
+  if (now.w && now.t > 0.02 && sim.vy < 1.15) {
+    const target = 0.02 + (now.w.surface - now.w.sink - 0.02) * now.t;
+    const k = 1 - Math.exp(-8 * dt);
+    sim.y += (target - sim.y) * k;
+    if (now.t > 0.3) {
+      sim.vy *= 0.15;
+      sim.grounded = true;
+    }
+    const drag = 1 - now.t * 0.5;
+    sim.vx *= drag;
+    sim.vz *= drag;
+  }
+  const eye = sim.y + 1.48;
+  const under = now.w ? Math.max(0, Math.min(1, (now.w.surface + 0.2 - eye) / 0.42)) : 0;
+  const wetTarget = now.w ? Math.max(under, now.t * 0.78) : 0;
+  if (wetTarget > 0.42 && sim.wet < 0.18) sim.splash = 1;
+  const wetK = 1 - Math.exp((wetTarget > sim.wet ? -7 : -1.15) * dt);
+  sim.wet += (wetTarget - sim.wet) * wetK;
+  sim.splash = Math.max(0, sim.splash - dt * 0.32);
 
   const moving = sim.grounded && sim.speed > 0.4 && !reducedMotion();
   sim.bob += moving ? sim.speed * dt * 2.1 : dt * 0.6;

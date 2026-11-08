@@ -68,8 +68,11 @@
   opacity: 0.42;
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
+.water-wash {
+  opacity: 0;
+  background:
+    radial-gradient(ellipse at 50% 40%, rgba(190, 230, 236, 0.08), rgba(70, 140, 158, 0.45) 70%, rgba(40, 90, 110, 0.72) 100%);
+  mix-blend-mode: multiply;
 }
 
 .banner-in {

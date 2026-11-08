@@ -28,6 +28,9 @@ export function applyLevel(
   const level = getLevel(id);
   sim.boxes = level.boxes;
   sim.memories = level.memories;
+  sim.waters = level.waters;
+  sim.wet = 0;
+  sim.splash = 0;
   sim.portalX = level.portal.x;
   sim.portalZ = level.portal.z;
   sim.portalTo = level.portal.to;

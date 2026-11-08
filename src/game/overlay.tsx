@@ -457,6 +457,103 @@ export function Toast() {
   );
 }
 
+export function WaterLens() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const washRef = useRef<HTMLDivElement>(null);
+  const drops = useRef<{ x: number; y: number; r: number; vy: number; life: number; trail: number }[]>([]);
+  const seenSplash = useRef(0);
+  useEffect(() => {
+    let raf = 0;
+    const frame = () => {
+      raf = requestAnimationFrame(frame);
+      const canvas = canvasRef.current;
+      const parent = canvas?.parentElement;
+      if (!canvas || !parent) return;
+      const w = parent.clientWidth;
+      const h = parent.clientHeight;
+      if (w < 2 || h < 2) return;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, w, h);
+      const wet = sim.wet;
+      const splash = sim.splash;
+      if (washRef.current) {
+        washRef.current.style.opacity = String(Math.min(0.92, wet * 0.88 + splash * 0.45));
+      }
+      if (splash > 0.72 && seenSplash.current < 0.4) {
+        for (let i = 0; i < 42; i++) {
+          drops.current.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: 10 + Math.random() * 34,
+            vy: 6 + Math.random() * 36,
+            life: 1,
+            trail: Math.random(),
+          });
+        }
+      }
+      seenSplash.current = splash;
+      if (wet > 0.4 && drops.current.length < 16 && Math.random() < wet * 0.12) {
+        drops.current.push({
+          x: Math.random() * w,
+          y: 8 + Math.random() * h * 0.25,
+          r: 5 + Math.random() * 14,
+          vy: 16 + Math.random() * 36,
+          life: 0.85,
+          trail: Math.random(),
+        });
+      }
+      const keep = [];
+      for (const drop of drops.current) {
+        drop.y += drop.vy * 0.016;
+        drop.vy += 22 * 0.016;
+        drop.life -= wet > 0.35 ? 0.0018 : 0.008;
+        if (drop.life <= 0 || drop.y > h + 40) continue;
+        keep.push(drop);
+        const g = ctx.createRadialGradient(
+          drop.x - drop.r * 0.28,
+          drop.y - drop.r * 0.32,
+          drop.r * 0.08,
+          drop.x,
+          drop.y,
+          drop.r,
+        );
+        g.addColorStop(0, `rgba(255,255,255,${0.62 * drop.life})`);
+        g.addColorStop(0.42, `rgba(214,238,244,${0.3 * drop.life})`);
+        g.addColorStop(1, "rgba(170,210,220,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(drop.x, drop.y, drop.r * 0.78, drop.r, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(255,255,255,${0.4 * drop.life})`;
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        if (drop.trail > 0.35) {
+          ctx.strokeStyle = `rgba(236,248,255,${0.28 * drop.life})`;
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(drop.x, drop.y - drop.r * 0.2);
+          ctx.lineTo(drop.x + (drop.trail - 0.5) * 4, drop.y - drop.r - 14 - drop.vy * 0.12);
+          ctx.stroke();
+        }
+      }
+      drops.current = keep.slice(-46);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <>
+      <div ref={washRef} className="water-wash pointer-events-none absolute inset-0 z-20" />
+      <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 z-20" />
+    </>
+  );
+}
+
 export function Fade() {
   const fading = useGame((s) => s.fading);
   return (

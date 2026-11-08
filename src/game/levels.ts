@@ -23,6 +23,17 @@ export type Prop = {
   sign?: string;
 };
 
+export type WaterVol = {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+  surface: number;
+  sink: number;
+  flow: [number, number];
+  color: string;
+};
+
 export type Memory = {
   id: string;
   title: string;
@@ -62,6 +73,7 @@ export type Level = {
   props: Prop[];
   extras: AABB[];
   memories: Memory[];
+  waters: WaterVol[];
   portal: { x: number; z: number; to: string; label: string };
   boxes: AABB[];
 };
@@ -109,7 +121,7 @@ function floorBox(minX: number, maxX: number, minZ: number, maxZ: number): AABB 
   return { minX, maxX, minY: -1.4, maxY: 0, minZ, maxZ };
 }
 
-function finish(partial: Omit<Level, "boxes">): Level {
+function finish(partial: Omit<Level, "boxes" | "waters"> & { waters?: WaterVol[] }): Level {
   const boxes = [...partial.extras];
   for (const p of partial.props) {
     if (!p.solid) continue;
@@ -148,7 +160,7 @@ function finish(partial: Omit<Level, "boxes">): Level {
       });
     }
   }
-  return { ...partial, boxes };
+  return { ...partial, waters: partial.waters ?? [], boxes };
 }
 
 function buildPool(): Level {
@@ -160,13 +172,6 @@ function buildPool(): Level {
     box(15.25, 2.35, 0, 0.5, 4.7, 22, wall, { rg: 0.78 }),
     box(-15.25, 2.35, 0, 0.5, 4.7, 22, wall, { rg: 0.78 }),
     box(0, 4.8, 0, 30, 0.28, 22, "#f7e7ea", { rg: 0.9, cast: false }),
-    box(0, 0.04, 0, 13.4, 0.06, 9.2, "#f7c6d6", {
-      solid: false,
-      cast: false,
-      trans: 0.88,
-      rg: 0.04,
-      m: 0.02,
-    }),
   ];
   for (const x of [-3.2, 3.2]) {
     props.push(
@@ -284,6 +289,18 @@ function buildPool(): Level {
     ],
     props,
     extras: [floorBox(-15, 15, -11, 11)],
+    waters: [
+      {
+        minX: -5.7,
+        maxX: 5.7,
+        minZ: -3.9,
+        maxZ: 3.9,
+        surface: 0.07,
+        sink: 1.58,
+        flow: [0.34, 0.16],
+        color: "#e7a3b8",
+      },
+    ],
     memories: [
       {
         id: "medence-1",
@@ -949,31 +966,6 @@ function buildPools(): Level {
       solid: false,
       cast: false,
     }),
-    box(0, 0.045, 0, 7.2, 0.04, 7.2, "#7ebdb8", {
-      solid: false,
-      cast: false,
-      trans: 0.45,
-      rg: 0.04,
-      m: 0.08,
-    }),
-    box(0, 0.045, 11.4, 4.2, 0.04, 5.4, "#8ec9c4", {
-      solid: false,
-      cast: false,
-      trans: 0.4,
-      rg: 0.04,
-    }),
-    box(-10.2, 0.045, 0, 4.4, 0.04, 6.2, "#8ec9c4", {
-      solid: false,
-      cast: false,
-      trans: 0.4,
-      rg: 0.04,
-    }),
-    box(10.2, 0.045, -2, 4.4, 0.04, 6.2, "#8ec9c4", {
-      solid: false,
-      cast: false,
-      trans: 0.4,
-      rg: 0.04,
-    }),
     box(-11.2, 0.28, 9.2, 1.4, 0.38, 0.42, "#f4efe2", { rg: 0.45 }),
     box(11.1, 0.28, -9.4, 1.4, 0.38, 0.42, "#f4efe2", { rg: 0.45 }),
     cyl(-1.7, 0.85, -1.1, 0.035, 1.7, "#e7eef6", { m: 0.95, rg: 0.12 }),
@@ -1027,7 +1019,7 @@ function buildPools(): Level {
     id: "poolrooms",
     name: "Poolrooms",
     index: "02",
-    blurb: "A víz áll. Mégis nyugodtabb, mint kellene.",
+    blurb: "A víz folyik, pedig nincs lefolyó.",
     spawn: { x: 0, y: 0.05, z: 12.2, yaw: 0 },
     sky: { zenith: "#d7e6c4", horizon: "#f4ecd4", ground: "#b7c8b0" },
     fog: { color: "#e4f0ea", near: 10, far: 34 },
@@ -1041,10 +1033,10 @@ function buildPools(): Level {
       cx: 0,
       cz: 0,
       y: 0.012,
-      color: "#8fd0cc",
-      roughness: 0.08,
-      metalness: 0.72,
-      mirror: 0.94,
+      color: "#efe3b8",
+      roughness: 0.2,
+      metalness: 0.42,
+      mirror: 0.72,
       distortion: 0.04,
       strength: 1.5,
     },
@@ -1061,6 +1053,48 @@ function buildPools(): Level {
     ],
     props,
     extras: [floorBox(-13.9, 13.9, -15.9, 15.9)],
+    waters: [
+      {
+        minX: -3.15,
+        maxX: 3.15,
+        minZ: -3.35,
+        maxZ: 3.35,
+        surface: 0.08,
+        sink: 1.62,
+        flow: [0.18, -0.72],
+        color: "#6fbfb8",
+      },
+      {
+        minX: -12.15,
+        maxX: -8.15,
+        minZ: -2.7,
+        maxZ: 2.7,
+        surface: 0.08,
+        sink: 1.48,
+        flow: [0.42, 0.2],
+        color: "#7ec8b4",
+      },
+      {
+        minX: 8.2,
+        maxX: 12.15,
+        minZ: -4.3,
+        maxZ: -0.15,
+        surface: 0.08,
+        sink: 1.5,
+        flow: [-0.38, -0.22],
+        color: "#74c4bc",
+      },
+      {
+        minX: -1.55,
+        maxX: 1.55,
+        minZ: -13.1,
+        maxZ: -7.35,
+        surface: 0.08,
+        sink: 1.42,
+        flow: [0.06, -0.48],
+        color: "#8fd0c6",
+      },
+    ],
     memories: [
       {
         id: "poolrooms-1",

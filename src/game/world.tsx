@@ -3,7 +3,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from "@react-three/postprocessing";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { getLevel, type Level, type Prop } from "@/game/levels";
+import { getLevel, type Level, type Prop, type WaterVol } from "@/game/levels";
 import { frame, sim } from "@/game/sim";
 import {
   classifySurface,
@@ -333,6 +333,150 @@ function Floor({ level, quality }: { level: Level; quality: Quality }) {
   );
 }
 
+const FLOW_VERT = `
+  uniform float uTime;
+  uniform vec2 uFlow;
+  varying vec2 vUv;
+  varying float vH;
+  void main() {
+    vUv = uv;
+    vec3 p = position;
+    float flow = uTime * 1.35;
+    p.z += sin(p.x * 1.5 + flow * (1.1 + abs(uFlow.x)) + p.y * 0.35) * 0.05;
+    p.z += sin(p.y * 2.1 - flow * (1.2 + abs(uFlow.y)) + uFlow.x) * 0.035;
+    vH = p.z;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  }
+`;
+
+const FLOW_FRAG = `
+  uniform vec3 uColor;
+  uniform float uTime;
+  uniform vec2 uFlow;
+  varying vec2 vUv;
+  varying float vH;
+  void main() {
+    vec2 dir = normalize(uFlow + vec2(0.2, 0.08));
+    float along = vUv.x * dir.y + vUv.y * dir.x;
+    float streak = sin(along * 52.0 - uTime * 2.6);
+    streak = smoothstep(0.45, 1.0, streak);
+    float fine = sin((vUv.x * dir.x - vUv.y * dir.y) * 90.0 - uTime * 3.4);
+    fine = smoothstep(0.72, 1.0, fine);
+    float alpha = 0.28 + streak * 0.42 + fine * 0.3;
+    vec3 col = mix(uColor, vec3(1.0), streak * 0.7 + fine * 0.4);
+    gl_FragColor = vec4(col, alpha);
+  }
+`;
+
+function WaterBody({ vol, quality }: { vol: WaterVol; quality: Quality }) {
+  const w = vol.maxX - vol.minX;
+  const d = vol.maxZ - vol.minZ;
+  const cx = (vol.minX + vol.maxX) / 2;
+  const cz = (vol.minZ + vol.maxZ) / 2;
+  const bottom = vol.surface - vol.sink - 0.85;
+  const midY = (bottom + vol.surface) / 2;
+  const wallH = vol.surface - bottom;
+  const maps = useRepeatedMaps("tile", Math.max(1, w / 0.7), Math.max(1, d / 0.7));
+  const flowMat = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(
+    () => ({
+      uTime: { value: 0 },
+      uColor: { value: new THREE.Color(vol.color) },
+      uFlow: { value: new THREE.Vector2(vol.flow[0], vol.flow[1]) },
+    }),
+    [vol],
+  );
+  useFrame((_, dt) => {
+    if (flowMat.current) flowMat.current.uniforms.uTime.value += dt;
+  });
+  return (
+    <group>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, bottom, cz]} receiveShadow>
+        <planeGeometry args={[w, d]} />
+        <meshStandardMaterial
+          color="#c9d7c4"
+          map={maps.map}
+          roughnessMap={maps.roughnessMap}
+          normalMap={maps.normalMap}
+          roughness={0.42}
+          metalness={0.06}
+        />
+      </mesh>
+      <mesh position={[cx, midY, vol.minZ]}>
+        <boxGeometry args={[w, wallH, 0.12]} />
+        <meshStandardMaterial color="#d5e0cc" map={maps.map} roughness={0.4} metalness={0.06} />
+      </mesh>
+      <mesh position={[cx, midY, vol.maxZ]}>
+        <boxGeometry args={[w, wallH, 0.12]} />
+        <meshStandardMaterial color="#d5e0cc" map={maps.map} roughness={0.4} metalness={0.06} />
+      </mesh>
+      <mesh position={[vol.minX, midY, cz]}>
+        <boxGeometry args={[0.12, wallH, d]} />
+        <meshStandardMaterial color="#d5e0cc" map={maps.map} roughness={0.4} metalness={0.06} />
+      </mesh>
+      <mesh position={[vol.maxX, midY, cz]}>
+        <boxGeometry args={[0.12, wallH, d]} />
+        <meshStandardMaterial color="#d5e0cc" map={maps.map} roughness={0.4} metalness={0.06} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, vol.surface - 0.01, cz]}>
+        <planeGeometry args={[w, d]} />
+        {quality === "low" ? (
+          <meshPhysicalMaterial
+            color={vol.color}
+            transmission={0.55}
+            thickness={1.4}
+            roughness={0.08}
+            metalness={0.04}
+            transparent
+            opacity={0.78}
+            ior={1.33}
+          />
+        ) : (
+          <MeshReflectorMaterial
+            resolution={quality === "max" ? 768 : 480}
+            blur={quality === "max" ? [12, 6] : [28, 14]}
+            mixBlur={0.22}
+            mixStrength={1.35}
+            mirror={0.86}
+            roughness={0.08}
+            metalness={0.55}
+            color={vol.color}
+            envMapIntensity={1.2}
+            distortion={0.22}
+            depthScale={0}
+            minDepthThreshold={0.15}
+            maxDepthThreshold={1.2}
+            reflectorOffset={0.02}
+          />
+        )}
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, vol.surface + 0.03, cz]}>
+        <planeGeometry args={[w, d, 28, 28]} />
+        <shaderMaterial
+          ref={flowMat}
+          transparent
+          depthWrite={false}
+          side={THREE.DoubleSide}
+          uniforms={uniforms}
+          vertexShader={FLOW_VERT}
+          fragmentShader={FLOW_FRAG}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function Waters({ level, quality }: { level: Level; quality: Quality }) {
+  if (level.waters.length === 0) return null;
+  return (
+    <>
+      {level.waters.map((vol, i) => (
+        <WaterBody key={`${level.id}-${i}`} vol={vol} quality={quality} />
+      ))}
+    </>
+  );
+}
+
 function MemoryOrb({ position, got }: { position: [number, number, number]; got: boolean }) {
   const ref = useRef<THREE.Group>(null);
   const glow = useMemo(() => {
@@ -628,6 +772,7 @@ export function World() {
         <Lightformer form="circle" intensity={2.2} color={level.sky.zenith} position={[0, 10, 0]} scale={[5, 5, 1]} />
       </Environment>
       <Floor level={level} quality={quality} />
+      <Waters level={level} quality={quality} />
       {level.props.map((p, i) => (
         <PropView key={`${level.id}-${i}`} p={p} shadows={shadows} />
       ))}

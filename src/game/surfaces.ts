@@ -260,8 +260,7 @@ export function classifySurface(p: {
 }
 
 export function floorSurface(levelId: string): SurfaceKind {
-  if (levelId === "medence" || levelId === "folyoso") return "tile";
-  if (levelId === "poolrooms") return "water";
+  if (levelId === "medence" || levelId === "folyoso" || levelId === "poolrooms") return "tile";
   if (levelId === "jatszo") return "grass";
   if (levelId === "szoba") return "carpet";
   return "asphalt";

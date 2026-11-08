@@ -3,7 +3,7 @@ import { Component, useEffect, useLayoutEffect, useState, type ReactNode } from 
 import * as THREE from "three";
 import { openMemory, pauseGame, resumeGame, closeNote, travelTo } from "@/game/actions";
 import { audio } from "@/game/audio";
-import { Fade, Hud, NoteCard, PauseLayer, TitleScreen, Toast, TouchControls } from "@/game/overlay";
+import { Fade, Hud, NoteCard, PauseLayer, TitleScreen, Toast, TouchControls, WaterLens } from "@/game/overlay";
 import { loadSettings, saveAuto } from "@/game/save";
 import { installProbe, sim, syncSettings } from "@/game/sim";
 import { useGame } from "@/game/store";
@@ -154,6 +154,7 @@ export function Game() {
       </div>
       <div className="vhs pointer-events-none absolute inset-0 z-10" />
       <div className="vignette pointer-events-none absolute inset-0 z-10" />
+      <WaterLens />
       {mode === "title" ? <TitleScreen /> : null}
       {mode === "play" || mode === "note" ? <Hud /> : null}
       {mode === "play" ? <TouchControls /> : null}
